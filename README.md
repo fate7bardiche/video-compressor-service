@@ -33,7 +33,7 @@ $ python3 server.py
 ```
 ### client側
 stage1では、ファイルの選択機能はありません。  
-client側を実行すると、`/video-compressor-service/client/video/test.mp4`が動的に選択され、ファイルがserver側にアップロードされます。
+client側を実行すると、`/video-compressor-service/client/video/example.mp4`が動的に選択され、ファイルがserver側にアップロードされます。
 ```
 $ pwd
 > ~/video-compressor-service/client
