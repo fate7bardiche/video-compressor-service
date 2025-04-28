@@ -26,18 +26,27 @@ def main():
         f.seek(0)
 
         print("file_byte_size", file_byte_size)
-        print("file_byte_size", os.path.getsize(input_path))
 
         first_data = f.read(config.payload_byte_size - config.file_size_byte_length)
         
         file_byte_size_bits = int.to_bytes(file_byte_size, config.file_size_byte_length, "big")
         sock.send(file_byte_size_bits + first_data)
 
+
+        capacity_check_message = sock.recv(4096).decode()
+        
+        if("error:" in capacity_check_message):
+            print(capacity_check_message.replace("error:", ""))   
+            sock.close()
+            sys.exit(1)    
+        print(capacity_check_message.replace("ok:", ""))   
+
         data = f.read(config.payload_byte_size)
         result = first_data
         while data:
             processing_message = f"{len(result)}/{file_byte_size}バイト送信済み"
-            sys.stdout.write("\033[2K\033[G%s" % processing_message)
+            # while抜けた後の最初のprint文が改行されるようにするために、制御コードが増えている
+            sys.stdout.write(f"\033[2K\033[1A\033[2K\033[G{processing_message}\n" )
             sys.stdout.flush()
 
             # 暫定対応: 待つと以下エラーを回避できるので実行している。
@@ -47,10 +56,7 @@ def main():
             sock.send(data)
             data = f.read(config.payload_byte_size)
             result+= data
-            
-        print("file_byte_size", file_byte_size)
-        print(os.path.getsize(input_path))
-            
+
     respoonse = sock.recv(4096)
     print(respoonse.decode())
 
