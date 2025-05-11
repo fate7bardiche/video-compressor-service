@@ -11,8 +11,6 @@ from interface import tcp_encoder, tcp_decoder
 
 
 def edited_file_download(sock: socket.socket):
-
-        
     # ファイルの処理状況をの確認
     # デフォルトは1分間隔
     
