@@ -5,6 +5,7 @@ import socket
 import ffmpeg
 import time
 import threading
+import asyncio
 from datetime import datetime
 
 import config
@@ -27,10 +28,10 @@ def file_edit_main(connection: socket.socket, target_file_path: str, client_json
     args = client_json["args"]
     print(input_args)
     stream = ffmpeg.input(target_file_path, **input_args)
+    probe = ffmpeg.probe(target_file_path, select_streams="a")
 
     # mp3に変換時、動画に音声ストリームがなかったら、エラーを返す
     if  operation == Operation.CONVERT_VIDEO_TO_AUDIO: 
-        probe = ffmpeg.probe(target_file_path, select_streams="a")
         if not probe.get('streams'):
             print("音声ストリームが存在する動画をアップロードして下さい")
             return
@@ -67,12 +68,40 @@ def file_edit_main(connection: socket.socket, target_file_path: str, client_json
     print("output_file_path", output_file_path)
     # output_file_path = f"edited_video/{}"
 
-    stream = ffmpeg.output(stream, output_file_path, **args)
+    # '-progress', 'pipe:1': 標準出力(fd1)にログを吐き出す
+    # '-stats_period', '60',: 60秒間隔で、ログを出す
+    # '-nostats': 人間向けのログの代わりに機械向けのログを吐き出す
+    stream = ffmpeg.output(stream, output_file_path, **args).global_args('-progress', 'pipe:1', '-stats_period', '60','-nostats')
     stream = ffmpeg.overwrite_output(stream)
-    output = ffmpeg.run(stream)
+    # output = ffmpeg.run_async(stream, pipe_stdout=True, quiet=True)
+    output = ffmpeg.run_async(stream, pipe_stdout=True, quiet=True)
 
+    print(probe)
+    duration =float(probe['format']['duration'])
+    print("duration", duration)
+    while True:
+        # line = asyncio.get_event_loop().run_in_executor(None, output)
+        line_bits = output.stdout.readline()
+        line = line_bits.decode().strip()
+        if len(line) == 0:
+            send_data = tcp_encoder.create_tcp_protocol({}, "null", 0, "".encode())
+            connection.send(send_data)
+            print()
+            break
 
-    print("output: ", output)
+        key, value_str = line.split("=")
+        if key == "out_time_ms":
+            current_time_sec = (float(value_str) / 1000000)
+            total_time_sec = duration / 1000000
+            # print((time_sec / duration) * 100)
+            editing_progress_message = f"\033[2K\033[1A\033[2K\033[G{current_time_sec} / {duration}秒\n{current_time_sec / duration * 100} / 100%" 
+            sys.stdout.write(editing_progress_message)
+            sys.stdout.flush()
+            # print(f"{(} / 100")
+            send_data = tcp_encoder.create_tcp_protocol({}, "text", 0, editing_progress_message.encode())
+            connection.send(send_data)
+
+    # print("output: ", output)
     print("動画編集終了")
 
     with open(output_file_path, "rb") as f:

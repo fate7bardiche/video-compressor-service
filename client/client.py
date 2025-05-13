@@ -7,6 +7,7 @@ import json
 from interface import tcp_encoder, tcp_decoder
 import file_upload
 import edited_file_download
+import share_video_processing_progress
 
 if __name__ == "__main__":
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -20,4 +21,5 @@ if __name__ == "__main__":
     print("接続完了しました")
 
     file_upload.upload_main(sock)
+    share_video_processing_progress.main(sock)
     edited_file_download.edited_file_download(sock)
