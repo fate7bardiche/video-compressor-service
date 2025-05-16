@@ -1,3 +1,4 @@
+import os
 import json
 import config
 
@@ -21,3 +22,17 @@ def get_file_stem(file_name: str):
 # hoge/fuga.mp4 -> mp4
 def get_file_extension(file_name: str):
     return file_name[file_name.rfind(".") + 1:]
+
+def create_default_json(status = None, description = None, solution = None):
+    json_data = {}
+    if not status == None:
+        json_data["status"] = int(status)
+    if not description == None:
+        json_data["description"] = str(description)
+    if not solution == None:
+        json_data["solution"] = str(solution)
+    return json_data
+
+def file_remove(file_path: str):
+    if os.path.isfile(file_path):
+        os.remove(file_path)
