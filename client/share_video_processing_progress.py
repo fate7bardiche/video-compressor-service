@@ -12,8 +12,15 @@ def main(sock: socket.socket):
         total_payload_size, json_data, media_type, payload = tcp_decoder.decode_tcp_protocol(edited_data)
 
         if(media_type == "null"):
-            print()
+            print(json_data["description"])
+            print("nullなので進捗確認終わり")
             break
+
+        if(json_data["status"] == 400):
+            print(json_data["description"])
+            print(json_data["solution"])
+            sock.close()
+            sys.exit(1)
 
         sys.stdout.write(payload.decode())
         sys.stdout.flush()

@@ -162,8 +162,6 @@ def upload_main(sock: socket.socket):
         print("file_byte_size", total_file_byte_size)
 
         media_type = utils.get_file_extension(file_name)
-        
-
 
         read_file_size = utils.calc_readble_file_bytes(media_type, request_json)
         first_data = f.read(read_file_size)
@@ -180,12 +178,10 @@ def upload_main(sock: socket.socket):
         print(len(response_data))
 
         total_payload_size, json_data, media_type, payload  = tcp_decoder.decode_tcp_protocol(response_data)
-        capacity_check_message = json_data["description"]
-        if("error:" in capacity_check_message):
-            print(capacity_check_message.replace("error:", ""))   
+        print(json_data["description"])    
+        if(json_data["status"] == 400):
             sock.close()
             sys.exit(1)    
-        print(capacity_check_message.replace("ok:", ""))   
 
         data = first_data
         sent_data_result = first_data
@@ -195,7 +191,7 @@ def upload_main(sock: socket.socket):
 
             # 暫定対応: 待つと以下エラーを回避できるので実行している。
             # ConnectionResetError: [Errno 104] Connection reset by peer
-            time.sleep(0.0001)
+            time.sleep(config.send_wait_sec)
             # sock.settimeout(2)
 
             processing_message = f"{len(sent_data_result)}/{total_file_byte_size}バイト送信済み"

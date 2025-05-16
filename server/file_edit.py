@@ -6,7 +6,9 @@ import ffmpeg
 import time
 import threading
 import asyncio
+import math
 from datetime import datetime
+
 
 import config
 import utils
@@ -29,26 +31,34 @@ def file_edit_main(connection: socket.socket, target_file_path: str, client_json
     print(input_args)
     stream = ffmpeg.input(target_file_path, **input_args)
     probe = ffmpeg.probe(target_file_path, select_streams="a")
+    print("probe", probe)
 
     # mp3に変換時、動画に音声ストリームがなかったら、エラーを返す
-    if  operation == Operation.CONVERT_VIDEO_TO_AUDIO: 
-        if not probe.get('streams'):
+    if  operation == Operation.CONVERT_VIDEO_TO_AUDIO.name: 
+        if len(probe.get('streams')) == 0:
             print("音声ストリームが存在する動画をアップロードして下さい")
+            sys.exit(1)
             return
         
-    if operation == Operation.CREATE_GIF_OR_WEBM:
+    palette_name = f"ffmpeg_files/palette_{output_file_stem}.png"
+    if operation == Operation.CREATE_GIF_OR_WEBM.name:
         if output_file_extension == "gif":
-            palette = ffmpeg.input(target_file_path).filter('fps', 15).filter('scale', 480. -2).output('palette.png', vframes=1, vf='paletegen')
+            palette = ffmpeg.input(target_file_path).filter('fps', 15).filter('scale', 480, -2).filter("palettegen").output(palette_name, vframes=1)
             ffmpeg.run(palette, overwrite_output=True)
 
-            filter_args["fps"]
-            filter_args["fps"]["pos_args"] = 15
-            filter_args["scale"]
+            print("gifのrunの後")
+
+            palette_in = ffmpeg.input(palette_name)
+
+            filter_args["fps"] = {}
+            filter_args["fps"]["pos_args"] = [15]
+            filter_args["scale"] = {}
             filter_args["scale"]["pos_args"] = [480, -2]
-            filter_args["paletteuse"]
-            filter_args["paletteuse"]["kw_args"] = {"dither": 'bayer'}
+
+            stream = ffmpeg.filter([stream, palette_in], 'paletteuse', dither='bayer')
 
         if output_file_extension == "webm":
+            print("webm area")
             args["vcodec"] = 'libvpx-vp9'
             args["acodec"] = 'libopus'
             args["video_bitrate"] = '1M'
@@ -58,79 +68,121 @@ def file_edit_main(connection: socket.socket, target_file_path: str, client_json
 
     # macにダウンロードしたmp4の時間トリミング(画面の切り出し)から
     for fa in list(filter_args.keys()):
-        pos_args = filter_args[fa]["pos_args"]
-        kw_args = filter_args[fa]["kw_args"]
+        pos_args = filter_args[fa]["pos_args"] if not filter_args[fa].get("pos_args") == None else []
+        kw_args = filter_args[fa]["kw_args"] if not filter_args[fa].get("kw_args") == None else {}
         stream = stream.filter(fa, *pos_args, **kw_args)
     
 
     output_file_name = f"{output_file_stem}.{output_file_extension}"
-    output_file_path = f"edited_video/{output_file_name}"
+    output_file_path = f"ffmpeg_files/edited_video/{output_file_name}"
     print("output_file_path", output_file_path)
     # output_file_path = f"edited_video/{}"
 
     # '-progress', 'pipe:1': 標準出力(fd1)にログを吐き出す
     # '-stats_period', '60',: 60秒間隔で、ログを出す
     # '-nostats': 人間向けのログの代わりに機械向けのログを吐き出す
-    stream = ffmpeg.output(stream, output_file_path, **args).global_args('-progress', 'pipe:1', '-stats_period', '60','-nostats')
+    stream = ffmpeg.output(stream, output_file_path, **args).global_args('-progress', 'pipe:1', '-stats_period', '3','-nostats')
     stream = ffmpeg.overwrite_output(stream)
-    # output = ffmpeg.run_async(stream, pipe_stdout=True, quiet=True)
-    output = ffmpeg.run_async(stream, pipe_stdout=True, quiet=True)
+    output = ffmpeg.run_async(stream, pipe_stdout=True, pipe_stderr=True, quiet=True)
+    # try:
+    #     output = ffmpeg.run_async(stream, quiet=True)
+    # except:
+    #     ffmpeg.Error
+    
 
-    print(probe)
     duration =float(probe['format']['duration'])
     print("duration", duration)
+    
     while True:
+        # print("output.returncode", output.returncode)
+            # , ffmpeg.Error('ffmpeg', *output.communicate())
+            
+
         # line = asyncio.get_event_loop().run_in_executor(None, output)
-        line_bits = output.stdout.readline()
-        line = line_bits.decode().strip()
-        if len(line) == 0:
-            send_data = tcp_encoder.create_tcp_protocol({}, "null", 0, "".encode())
+        # stdout_bits, stderr_bits = output.communicate()
+        stdout_bits = output.stdout.readline()
+        # stderr_bits = output.stderr.readline()
+        stdout_line = stdout_bits.decode().strip()
+        # print(stdout_line)
+        # print(stderr_bits.decode().strip())
+
+        
+
+        # 正しく変換が終わったら
+        if len(stdout_line) == 0:
+            print("進捗終わり")
+            send_data = tcp_encoder.create_tcp_protocol(utils.create_default_json(200, "編集完了"), "null", 0, "".encode())
             connection.send(send_data)
-            print()
             break
 
-        key, value_str = line.split("=")
+        key, value_str = stdout_line.split("=")
         if key == "out_time_ms":
-            current_time_sec = (float(value_str) / 1000000)
-            total_time_sec = duration / 1000000
-            # print((time_sec / duration) * 100)
-            editing_progress_message = f"\033[2K\033[1A\033[2K\033[G{current_time_sec} / {duration}秒\n{current_time_sec / duration * 100} / 100%" 
+            ms_to_sec_division_num = 1000000
+
+            # 少数第三位まで表示
+            current_time_sec = math.floor((float(value_str) / ms_to_sec_division_num) * 1000) / 1000
+            # 少数第三位まで表示
+            current_parsent = math.floor((current_time_sec / duration * 100) * 1000) / 1000
+            editing_progress_message = f"\033[2K\033[1A\033[2K\033[G{current_time_sec} / {duration}秒\n{current_parsent} / 100%" 
             sys.stdout.write(editing_progress_message)
             sys.stdout.flush()
-            # print(f"{(} / 100")
-            send_data = tcp_encoder.create_tcp_protocol({}, "text", 0, editing_progress_message.encode())
+
+            respoinse_json = utils.create_default_json(200, "問題なし")
+            send_data = tcp_encoder.create_tcp_protocol(respoinse_json, "text", 0, editing_progress_message.encode())
             connection.send(send_data)
+
+    out, err = output.communicate()
+    print("output.returncode", output.returncode)
+    if not output.returncode == 0:
+        print("編集時のエラー", err.decode())
+        send_data = tcp_encoder.create_tcp_protocol(utils.create_default_json(400, ffmpeg.Error('ffmpeg', out, err), "引数を確認してください"), "0", 0, "".encode())
+        connection.send(send_data)
+        sys.exit(1)
 
     # print("output: ", output)
     print("動画編集終了")
 
     with open(output_file_path, "rb") as f:
         total_file_size = os.path.getsize(output_file_path)
-        json_data = {"description": "", "file_name": output_file_name}
+        json_data = utils.create_default_json(200)
+        json_data["file_name"] = output_file_name
 
         read_bytes = utils.calc_readble_file_bytes(media_type, json_data)
         data = f.read(read_bytes)
         total_sent_bytes = 0
         while data:
+            print('current_send_data_len', len(data))
             send_data = tcp_encoder.create_tcp_protocol(json_data, media_type, total_file_size, data)
             connection.send(send_data)
+
+            print("")
+            print("")
+            # バイト数の一致で見ないで、media_typeがnullで帰ってきたら終わりとかにする
+            # pipe brokenしてる
             total_sent_bytes += len(data)
 
-            time.sleep(0.0001)
+            time.sleep(config.send_wait_sec)
 
             processing_message = f"{total_sent_bytes}/{total_file_size}バイト送信済み"
             # while抜けた後の最初のprint文が改行されるようにするために、制御コードが増えている
             sys.stdout.write(f"\033[2K\033[1A\033[2K\033[G{processing_message}\n" )
             sys.stdout.flush()
 
+            print("")
+
             data = f.read(read_bytes)
         print("編集したファイルの送信完了")
+        # 送信が終わったことをmedia_typeをnullで送信することでフラグとして使用する
+        send_data = tcp_encoder.create_tcp_protocol(json_data, "null", total_file_size, data)
+        connection.send(send_data)
+
 
     # 編集前と編集後のファイルどちらも削除する
-    os.remove(target_file_path)
+    utils.file_remove(target_file_path)
     print("アップロードしたファイルの削除完了")
-    os.remove(output_file_path)
+    utils.file_remove(output_file_path)
     print("作成されたファイルの削除完了")
+    utils.file_remove(palette_name)
 
 
 

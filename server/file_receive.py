@@ -14,8 +14,10 @@ upper_limit_dir_size = 4000000000000
 
 # 引数のpathに渡したディレクトリ以下のサイズをバイト単位で返す
 # ディレクトリがネストしている場合は再帰的に末端まで計算して合計する
-def get_dir_size(path: str="video/"):
+def get_dir_size(path: str):
     total = 0
+    if not os.path.isdir(path): 
+        return 0
     for p in os.listdir(path):
         full_path = os.path.join(path, p)
         print(full_path)
@@ -35,17 +37,22 @@ def file_receive_main(connection: socket.socket):
     print(media_type)
     print(total_payload_size)
     
-    current_capaciy = get_dir_size()
-    print("current_capaciy", current_capaciy)
-    if(total_payload_size  + current_capaciy > upper_limit_dir_size):
-        response_json = {"description": "error:容量が上限に達したので、ファイルをアップロードできません。\n保管できるファイルサイズの合計は4TBまでです。"}
+    current_upload_strage_capacity = get_dir_size("video/")
+    current_editrd_file_strage_capacity = get_dir_size("ffmpeg_files/")
+    print("current_upload_strage_capaciy", current_upload_strage_capacity)
+    print("current_editrd_file_strage_capaciy", current_editrd_file_strage_capacity)
+    total_strage_capacity = current_upload_strage_capacity + current_editrd_file_strage_capacity
+    if(total_payload_size  + total_strage_capacity > upper_limit_dir_size):
+        description = "容量が上限に達したので、ファイルをアップロードできません。\n保管できるファイルサイズの合計は4TBまでです。"
+        response_json = utils.create_default_json(400, description)
         response = tcp_encoder.create_tcp_protocol(response_json, media_type, total_payload_size, "hoge". encode())
         connection.send(response)
         print(response_json["description"])
         connection.close()
         sys.exit(1)
     else:
-        response_json = {"description": f"ok:上限の4TBまで余裕があるので、ファイルをアップロード可能です。残り{upper_limit_dir_size - current_capaciy}バイトです。"}
+        description = f"上限の4TBまで余裕があるので、ファイルをアップロード可能です。残り{upper_limit_dir_size - total_strage_capacity}バイトです。"
+        response_json = utils.create_default_json(200, description)
         response = tcp_encoder.create_tcp_protocol(response_json, media_type, total_payload_size, "hoge". encode())
         print("response len", len(response))
         connection.send(response)
@@ -57,10 +64,13 @@ def file_receive_main(connection: socket.socket):
         data = connection.recv(config.sock_packet_size)
 
         total_payload_size, json_data, media_type, payload = tcp_decoder.decode_tcp_protocol(data)
-        read_file_size = config.payload_byte_size - len(media_type.encode()) - len(json.dumps(json_data).encode())
+        # read_file_size = config.payload_byte_size - len(media_type.encode()) - len(json.dumps(json_data).encode())
+        read_file_size = utils.calc_readble_file_bytes(media_type, json_data)
+        # print("read_file_size", read_file_size)
+        # print("len(payload)", len(payload))
+        # print("read_file_size2", utils.calc_readble_file_bytes(media_type, json_data))
 
         file += payload
-        # print(payload)
         # print(len(payload))
         if(len(payload) < read_file_size):
             print("payload len", len(payload))
@@ -73,8 +83,11 @@ def file_receive_main(connection: socket.socket):
                 break
             else:
                 error_response_message = "指定されたファイルサイズと送られたデータのサイズが一致しませんでした"
+                solution = "ヘッダーで指定するバイト数と、ファイルのバイト数が一致するようにしてください。"
+                error_json = utils.create_default_json(400, error_response_message, solution)
+                send_data = tcp_encoder.create_tcp_protocol(error_json, "", 0, "".encode())
                 print(error_response_message)
-                connection.send(error_response_message.encode())
+                connection.send(send_data)
                 sys.exit(1)
 
     file_stem = utils.get_file_stem(json_data["file_name"])
@@ -83,10 +96,12 @@ def file_receive_main(connection: socket.socket):
         print("write")
         f.write(file)
     
-    uploaded_capacity_size = get_dir_size()
-    complete_message = f"ファイルのアップロードが完了しました, 残り{upper_limit_dir_size - uploaded_capacity_size}バイトアップロード可能です"
+    current_upload_strage_capacity = get_dir_size("video/")
+    current_editrd_file_strage_capacity = get_dir_size("ffmpeg_files/")
+    total_strage_capacity = current_upload_strage_capacity + current_editrd_file_strage_capacity
+    complete_message = f"ファイルのアップロードが完了しました, 残り{upper_limit_dir_size - total_strage_capacity}バイトアップロード可能です"
     print(complete_message)
-    respoinse_json = {"description": complete_message}
+    respoinse_json = utils.create_default_json(200, complete_message)
     response = tcp_encoder.create_tcp_protocol(respoinse_json, "none", 0, "".encode())
     connection.send(response)
 
