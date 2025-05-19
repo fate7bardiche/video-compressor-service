@@ -106,16 +106,16 @@ def file_edit_main(connection: socket.socket, target_file_path: str, client_json
         # print(stdout_line)
         # print(stderr_bits.decode().strip())
 
-        
-
         # 正しく変換が終わったら
-        if len(stdout_line) == 0:
-            print("進捗終わり")
-            send_data = tcp_encoder.create_tcp_protocol(utils.create_default_json(200, "編集完了"), "null", 0, "".encode())
-            connection.send(send_data)
-            break
+        # if len(stdout_line) == 0:
+        #     break
 
         key, value_str = stdout_line.split("=")
+
+        # 正しく変換が終わったら
+        if key == "progress" and value_str == "end":
+            break
+
         if key == "out_time_ms":
             ms_to_sec_division_num = 1000000
 
@@ -133,14 +133,20 @@ def file_edit_main(connection: socket.socket, target_file_path: str, client_json
 
     out, err = output.communicate()
     print("output.returncode", output.returncode)
-    if not output.returncode == 0:
+    if output.returncode == 0:
+        print("進捗終わり")
+        send_data = tcp_encoder.create_tcp_protocol(utils.create_default_json(200, "編集完了"), "null", 0, "hoge".encode())
+        connection.send(send_data)
+    else:
         print("編集時のエラー", err.decode())
-        send_data = tcp_encoder.create_tcp_protocol(utils.create_default_json(400, ffmpeg.Error('ffmpeg', out, err), "引数を確認してください"), "0", 0, "".encode())
+        send_data = tcp_encoder.create_tcp_protocol(utils.create_default_json(400, "引数が不正です", "引数を確認してください"), "0", 0, "fuga".encode())
         connection.send(send_data)
         sys.exit(1)
 
     # print("output: ", output)
     print("動画編集終了")
+
+    time.sleep(config.send_wait_sec)
 
     with open(output_file_path, "rb") as f:
         total_file_size = os.path.getsize(output_file_path)
@@ -151,8 +157,9 @@ def file_edit_main(connection: socket.socket, target_file_path: str, client_json
         data = f.read(read_bytes)
         total_sent_bytes = 0
         while data:
-            print('current_send_data_len', len(data))
+            
             send_data = tcp_encoder.create_tcp_protocol(json_data, media_type, total_file_size, data)
+            print('current_send_data_len', len(data), "send_data: ", len(send_data))
             connection.send(send_data)
 
             print("")
@@ -173,7 +180,7 @@ def file_edit_main(connection: socket.socket, target_file_path: str, client_json
             data = f.read(read_bytes)
         print("編集したファイルの送信完了")
         # 送信が終わったことをmedia_typeをnullで送信することでフラグとして使用する
-        send_data = tcp_encoder.create_tcp_protocol(json_data, "null", total_file_size, data)
+        send_data = tcp_encoder.create_tcp_protocol(json_data, "null", total_file_size, "".encode())
         connection.send(send_data)
 
 

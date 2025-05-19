@@ -9,6 +9,7 @@ def decode_tcp_protocol(data: bytes):
 
 def decode_tcp_header(header: bytes):
     json_size = int.from_bytes(header[:2], "big")
+    print("json_size: ", json_size)
     media_type_size = int.from_bytes(header[2:3], "big")
     total_payload_size = int.from_bytes(header[3:8], "big")
     return json_size, media_type_size, total_payload_size
