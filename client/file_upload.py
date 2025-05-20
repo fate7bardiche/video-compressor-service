@@ -171,7 +171,7 @@ def upload_main(sock: socket.socket):
         print("request_byte_len", len(request))
         sock.send(request)
 
-        time.sleep(0.5)
+        time.sleep(config.flow_switching_wait_sec)
 
         response_data = sock.recv(config.sock_packet_size)
 
@@ -205,3 +205,5 @@ def upload_main(sock: socket.socket):
     respoonse = sock.recv(4096)
     total_payload_size, json_data, media_type, payload = tcp_decoder.decode_tcp_protocol(respoonse)
     print(json_data["description"])
+    if json_data["status"] == 400:
+        sys,exit()

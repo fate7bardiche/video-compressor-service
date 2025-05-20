@@ -27,7 +27,7 @@ def get_dir_size(path: str):
             total += get_dir_size(full_path)
     return total
 
-def file_receive_main(connection: socket.socket):
+def file_receive_main(connection: socket.socket, on_error: callable):
     # 初回の受信時だけパケットがファイルのバイト数を持っているので、whileとは別で処理する
     first_data = connection.recv(config.sock_packet_size)
     print("request len", len(first_data))
@@ -49,6 +49,7 @@ def file_receive_main(connection: socket.socket):
         connection.send(response)
         print(response_json["description"])
         connection.close()
+        on_error()
         sys.exit(1)
     else:
         description = f"上限の4TBまで余裕があるので、ファイルをアップロード可能です。残り{upper_limit_dir_size - total_strage_capacity}バイトです。"
@@ -88,6 +89,7 @@ def file_receive_main(connection: socket.socket):
                 send_data = tcp_encoder.create_tcp_protocol(error_json, "", 0, "".encode())
                 print(error_response_message)
                 connection.send(send_data)
+                on_error()
                 sys.exit(1)
 
     file_stem = utils.get_file_stem(json_data["file_name"])

@@ -16,7 +16,7 @@ import utils
 from interface import tcp_encoder, tcp_decoder
 from domain.operation import Operation
 
-def file_edit_main(connection: socket.socket, target_file_path: str, client_json: dict[str, any], media_type: str):
+def file_edit_main(connection: socket.socket, target_file_path: str, client_json: dict[str, any], media_type: str, on_error: callable, on_finish: callable):
     operation = client_json["operation"]
 
     output_file_stem = utils.get_file_stem(target_file_path)
@@ -36,7 +36,12 @@ def file_edit_main(connection: socket.socket, target_file_path: str, client_json
     # mp3に変換時、動画に音声ストリームがなかったら、エラーを返す
     if  operation == Operation.CONVERT_VIDEO_TO_AUDIO.name: 
         if len(probe.get('streams')) == 0:
-            print("音声ストリームが存在する動画をアップロードして下さい")
+            description = "音声ストリームが存在しなかったので、音声に変換できません"
+            solution = "音声ストリームが存在する動画をアップロードして下さい"
+            print(description)
+            send_data = tcp_encoder.create_tcp_protocol(utils.create_default_json(400, description, solution), "0", 0, "".encode())
+            connection.send(send_data)
+            on_error()
             sys.exit(1)
             return
         
@@ -141,6 +146,7 @@ def file_edit_main(connection: socket.socket, target_file_path: str, client_json
         print("編集時のエラー", err.decode())
         send_data = tcp_encoder.create_tcp_protocol(utils.create_default_json(400, "引数が不正です", "引数を確認してください"), "0", 0, "fuga".encode())
         connection.send(send_data)
+        on_error()
         sys.exit(1)
 
     # print("output: ", output)
@@ -190,6 +196,8 @@ def file_edit_main(connection: socket.socket, target_file_path: str, client_json
     utils.file_remove(output_file_path)
     print("作成されたファイルの削除完了")
     utils.file_remove(palette_name)
+    # IP制限を解除する
+    on_finish()
 
 
 
