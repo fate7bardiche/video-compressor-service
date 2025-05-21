@@ -75,7 +75,10 @@ def file_edit_main(connection: socket.socket, target_file_path: str, client_json
     output_file_path = f"ffmpeg_files/edited_video/{output_file_name}"
     print("output_file_path", output_file_path)
 
-    stream = ffmpeg.output(stream, output_file_path, **args).global_args('-progress', 'pipe:1', '-stats_period', '3','-nostats')
+    # '-progress', 'pipe:1': 標準出力(fd1)にログを吐き出す
+    # '-stats_period', '60',: 60秒間隔で、ログを出す
+    # '-nostats': 人間向けのログの代わりに機械向けのログを吐き出す
+    stream = ffmpeg.output(stream, output_file_path, **args).global_args('-progress', 'pipe:1', '-stats_period', '60','-nostats')
     stream = ffmpeg.overwrite_output(stream)
     output = ffmpeg.run_async(stream, pipe_stdout=True, pipe_stderr=True, quiet=True)
     
