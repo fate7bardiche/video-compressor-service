@@ -10,9 +10,6 @@ import utils
 from interface import tcp_encoder, tcp_decoder
 from domain.operation import Operation
 
-
-
-
 def operation_select_flow():
     operation_list = [operaton for operaton in Operation]
     for i in range(len(operation_list)):
@@ -53,14 +50,6 @@ def args_select_flow(operation_name: str, request_json):
             except Exception as e:
                 print(e)
                 continue
-            
-            # try:
-            #     height = input("縦(hehight) : ")
-            # except Exception as e:
-            #     print(e)
-            #     continue
-
-            # args["s"] = f"{width}x{height}"
 
             filter_args["scale"] = {}
             # -1ではなく、-2。奇数が算出されるとfmpegがエンコード時に弾いてしまう。
@@ -104,8 +93,6 @@ def args_select_flow(operation_name: str, request_json):
 
             request_json["output_extension"] = extension_type_list[extension_number - 1]
 
-            # print("時間範囲を指定してください")
-            # print("例: 23:12:08~23:12:15")
             print("変換する時間範囲を設定します。")
             print("秒単位で入力して下さい。最大30秒です。")
             start_sec = int(input("開始地点 > "))

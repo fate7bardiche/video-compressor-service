@@ -20,7 +20,6 @@ def get_dir_size(path: str):
         return 0
     for p in os.listdir(path):
         full_path = os.path.join(path, p)
-        print(full_path)
         if os.path.isfile(full_path):
             total += os.path.getsize(full_path)
         elif os.path.isdir(full_path):
@@ -32,9 +31,9 @@ def file_receive_main(connection: socket.socket, on_error: callable):
     first_data = connection.recv(config.sock_packet_size)
     total_payload_size, json_data, media_type, payload = tcp_decoder.decode_tcp_protocol(first_data)
 
-    print(total_payload_size)
-    print(json_data)
-    print(media_type)
+    print("total_payload_size: ", total_payload_size)
+    print("json_data: ",json_data)
+    print("media_type: ", media_type)
     
     current_upload_strage_capacity = get_dir_size("video/")
     current_editrd_file_strage_capacity = get_dir_size("ffmpeg_files/")
