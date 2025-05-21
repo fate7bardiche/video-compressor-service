@@ -25,11 +25,6 @@ if __name__ == '__main__':
     sock.bind((config.server_address, config.server_port))
     sock.listen(5)
 
-    # connection, address  = sock.accept()
-
-    # uploaded_file_path, json_data, media_type, = file_receive.file_receive_main(connection)
-    # file_edit.file_edit_main(connection, uploaded_file_path, json_data, media_type)
-
     while True:
         connection, address  = sock.accept()
 

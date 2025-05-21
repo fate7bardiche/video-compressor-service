@@ -128,11 +128,7 @@ def upload_main(sock: socket.socket):
     file_name = ""
 
     upload_video_list = list(filter(lambda s: not s[:1] == ".", os.listdir(dir_path)))
-    for i in range(len(upload_video_list)):
-        # 隠しファイルを除外
-        # if uv[:1] == ".":
-        #     continue 
-
+    for i in range(len(upload_video_list)): 
         full_path = os.path.join(dir_path, upload_video_list[i])
         if os.path.isfile(full_path):
             print(f"{i + 1}.", upload_video_list[i])
@@ -159,8 +155,6 @@ def upload_main(sock: socket.socket):
         total_file_byte_size = f.tell()
         f.seek(0)
 
-        print("file_byte_size", total_file_byte_size)
-
         media_type = utils.get_file_extension(file_name)
 
         read_file_size = utils.calc_readble_file_bytes(media_type, request_json)
@@ -168,14 +162,11 @@ def upload_main(sock: socket.socket):
 
         
         request = tcp_encoder.create_tcp_protocol(request_json, media_type, total_file_byte_size, "".encode())
-        print("request_byte_len", len(request))
         sock.send(request)
 
         time.sleep(config.flow_switching_wait_sec)
 
         response_data = sock.recv(config.sock_packet_size)
-
-        print(len(response_data))
 
         total_payload_size, json_data, media_type, payload  = tcp_decoder.decode_tcp_protocol(response_data)
         print(json_data["description"])    
@@ -192,7 +183,6 @@ def upload_main(sock: socket.socket):
             # 暫定対応: 待つと以下エラーを回避できるので実行している。
             # ConnectionResetError: [Errno 104] Connection reset by peer
             time.sleep(config.send_wait_sec)
-            # sock.settimeout(2)
 
             processing_message = f"{len(sent_data_result)}/{total_file_byte_size}バイト送信済み"
             # while抜けた後の最初のprint文が改行されるようにするために、制御コードが増えている

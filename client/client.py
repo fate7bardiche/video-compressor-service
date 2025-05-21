@@ -15,14 +15,12 @@ if __name__ == "__main__":
     try:
         sock.connect((config.server_address, config.server_port))
     except socket.error as err:
-        print("コネクト時のエラー")
+        print("コネクト時のエラーが起きました。")
         print(err)
-
     print("接続完了しました")
 
     time.sleep(config.flow_switching_wait_sec)
 
-    # IPアドレス制限の機能をここに実装する!
     while True:
         edited_data = sock.recv(config.sock_packet_size)
         print("first_edited_data", len(edited_data))

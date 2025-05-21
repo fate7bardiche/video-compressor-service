@@ -30,12 +30,11 @@ def get_dir_size(path: str):
 def file_receive_main(connection: socket.socket, on_error: callable):
     # 初回の受信時だけパケットがファイルのバイト数を持っているので、whileとは別で処理する
     first_data = connection.recv(config.sock_packet_size)
-    print("request len", len(first_data))
     total_payload_size, json_data, media_type, payload = tcp_decoder.decode_tcp_protocol(first_data)
 
+    print(total_payload_size)
     print(json_data)
     print(media_type)
-    print(total_payload_size)
     
     current_upload_strage_capacity = get_dir_size("video/")
     current_editrd_file_strage_capacity = get_dir_size("ffmpeg_files/")
@@ -60,24 +59,15 @@ def file_receive_main(connection: socket.socket, on_error: callable):
         print(response_json["description"])
 
     file = "".encode()
-    print("file len", len(file))
     while True:
         data = connection.recv(config.sock_packet_size)
 
         total_payload_size, json_data, media_type, payload = tcp_decoder.decode_tcp_protocol(data)
-        # read_file_size = config.payload_byte_size - len(media_type.encode()) - len(json.dumps(json_data).encode())
         read_file_size = utils.calc_readble_file_bytes(media_type, json_data)
-        # print("read_file_size", read_file_size)
-        # print("len(payload)", len(payload))
-        # print("read_file_size2", utils.calc_readble_file_bytes(media_type, json_data))
 
         file += payload
-        # print(len(payload))
         if(len(payload) < read_file_size):
-            print("payload len", len(payload))
-            print("read_file_size", read_file_size)
             file_size = len(file)
-            print("受信したファイルのサイズ",  file_size)
             # 指定されたファイルサイズと送られたデータのサイズが一致していたら
             if file_size == total_payload_size:
                 print("指定されたファイルサイズと送られたデータのサイズが一致しました")
@@ -104,7 +94,7 @@ def file_receive_main(connection: socket.socket, on_error: callable):
     complete_message = f"ファイルのアップロードが完了しました, 残り{upper_limit_dir_size - total_strage_capacity}バイトアップロード可能です"
     print(complete_message)
     respoinse_json = utils.create_default_json(200, complete_message)
-    response = tcp_encoder.create_tcp_protocol(respoinse_json, "none", 0, "".encode())
+    response = tcp_encoder.create_tcp_protocol(respoinse_json, "null", 0, "".encode())
     connection.send(response)
 
     return output_file_path, json_data, media_type,

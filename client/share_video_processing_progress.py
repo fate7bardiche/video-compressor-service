@@ -12,9 +12,7 @@ def main(sock: socket.socket):
         total_payload_size, json_data, media_type, payload = tcp_decoder.decode_tcp_protocol(edited_data)
 
         if(media_type == "null"):
-            print("json_data: ", json_data)
-            print("payload: ", payload)
-            print("nullなので進捗確認終わり")
+            print(json_data["description"])
             break
 
         if(json_data["status"] == 400):

@@ -13,25 +13,22 @@ from datetime import datetime
 import config
 import utils
 
-from interface import tcp_encoder, tcp_decoder
+from interface import tcp_encoder
 from domain.operation import Operation
 
 def file_edit_main(connection: socket.socket, target_file_path: str, client_json: dict[str, any], media_type: str, on_error: callable, on_finish: callable):
     operation = client_json["operation"]
 
     output_file_stem = utils.get_file_stem(target_file_path)
-    print(client_json)
     output_file_extension = media_type  if  client_json.get("output_extension") == None else client_json.get("output_extension")
-    print(media_type)
 
-    # file_name = client_json["file_name"]
     input_args = client_json["input_args"]
     filter_args = client_json["filter_args"]
     args = client_json["args"]
-    print(input_args)
+    print("input_args: ", input_args)
     stream = ffmpeg.input(target_file_path, **input_args)
     probe = ffmpeg.probe(target_file_path, select_streams="a")
-    print("probe", probe)
+    print("probe: ", probe)
 
     # mp3に変換時、動画に音声ストリームがなかったら、エラーを返す
     if  operation == Operation.CONVERT_VIDEO_TO_AUDIO.name: 
@@ -39,6 +36,7 @@ def file_edit_main(connection: socket.socket, target_file_path: str, client_json
             description = "音声ストリームが存在しなかったので、音声に変換できません"
             solution = "音声ストリームが存在する動画をアップロードして下さい"
             print(description)
+            print(solution)
             send_data = tcp_encoder.create_tcp_protocol(utils.create_default_json(400, description, solution), "0", 0, "".encode())
             connection.send(send_data)
             on_error()
@@ -51,19 +49,15 @@ def file_edit_main(connection: socket.socket, target_file_path: str, client_json
             palette = ffmpeg.input(target_file_path).filter('fps', 15).filter('scale', 480, -2).filter("palettegen").output(palette_name, vframes=1)
             ffmpeg.run(palette, overwrite_output=True)
 
-            print("gifのrunの後")
-
             palette_in = ffmpeg.input(palette_name)
+            stream = ffmpeg.filter([stream, palette_in], 'paletteuse', dither='bayer')
 
             filter_args["fps"] = {}
             filter_args["fps"]["pos_args"] = [15]
             filter_args["scale"] = {}
             filter_args["scale"]["pos_args"] = [480, -2]
 
-            stream = ffmpeg.filter([stream, palette_in], 'paletteuse', dither='bayer')
-
         if output_file_extension == "webm":
-            print("webm area")
             args["vcodec"] = 'libvpx-vp9'
             args["acodec"] = 'libopus'
             args["video_bitrate"] = '1M'
@@ -71,7 +65,6 @@ def file_edit_main(connection: socket.socket, target_file_path: str, client_json
             args["crf"] = 23
             args["deadline"] = 'good'
 
-    # macにダウンロードしたmp4の時間トリミング(画面の切り出し)から
     for fa in list(filter_args.keys()):
         pos_args = filter_args[fa]["pos_args"] if not filter_args[fa].get("pos_args") == None else []
         kw_args = filter_args[fa]["kw_args"] if not filter_args[fa].get("kw_args") == None else {}
@@ -81,46 +74,27 @@ def file_edit_main(connection: socket.socket, target_file_path: str, client_json
     output_file_name = f"{output_file_stem}.{output_file_extension}"
     output_file_path = f"ffmpeg_files/edited_video/{output_file_name}"
     print("output_file_path", output_file_path)
-    # output_file_path = f"edited_video/{}"
 
-    # '-progress', 'pipe:1': 標準出力(fd1)にログを吐き出す
-    # '-stats_period', '60',: 60秒間隔で、ログを出す
-    # '-nostats': 人間向けのログの代わりに機械向けのログを吐き出す
     stream = ffmpeg.output(stream, output_file_path, **args).global_args('-progress', 'pipe:1', '-stats_period', '3','-nostats')
     stream = ffmpeg.overwrite_output(stream)
     output = ffmpeg.run_async(stream, pipe_stdout=True, pipe_stderr=True, quiet=True)
-    # try:
-    #     output = ffmpeg.run_async(stream, quiet=True)
-    # except:
-    #     ffmpeg.Error
     
-
     duration =float(probe['format']['duration'])
     print("duration", duration)
     
+    # 動画処理の進捗を確認し、clientに共有する
     while True:
-        # print("output.returncode", output.returncode)
-            # , ffmpeg.Error('ffmpeg', *output.communicate())
-            
-
-        # line = asyncio.get_event_loop().run_in_executor(None, output)
-        # stdout_bits, stderr_bits = output.communicate()
         stdout_bits = output.stdout.readline()
-        # stderr_bits = output.stderr.readline()
         stdout_line = stdout_bits.decode().strip()
-        # print(stdout_line)
-        # print(stderr_bits.decode().strip())
-
-        # 正しく変換が終わったら
-        # if len(stdout_line) == 0:
-        #     break
 
         key, value_str = stdout_line.split("=")
 
         # 正しく変換が終わったら
         if key == "progress" and value_str == "end":
+            print()
             break
-
+        
+        # 進捗率を計算
         if key == "out_time_ms":
             ms_to_sec_division_num = 1000000
 
@@ -137,22 +111,22 @@ def file_edit_main(connection: socket.socket, target_file_path: str, client_json
             connection.send(send_data)
 
     out, err = output.communicate()
-    print("output.returncode", output.returncode)
     if output.returncode == 0:
-        print("進捗終わり")
+        print("進捗確認終了")
         send_data = tcp_encoder.create_tcp_protocol(utils.create_default_json(200, "編集完了"), "null", 0, "hoge".encode())
         connection.send(send_data)
     else:
-        print("編集時のエラー", err.decode())
+        print("編集時にエラーが発生", err.decode())
         send_data = tcp_encoder.create_tcp_protocol(utils.create_default_json(400, "引数が不正です", "引数を確認してください"), "0", 0, "fuga".encode())
         connection.send(send_data)
         on_error()
         sys.exit(1)
 
-    # print("output: ", output)
     print("動画編集終了")
 
+
     time.sleep(config.send_wait_sec)
+
 
     with open(output_file_path, "rb") as f:
         total_file_size = os.path.getsize(output_file_path)
@@ -162,16 +136,10 @@ def file_edit_main(connection: socket.socket, target_file_path: str, client_json
         read_bytes = utils.calc_readble_file_bytes(media_type, json_data)
         data = f.read(read_bytes)
         total_sent_bytes = 0
-        while data:
-            
+        while data:       
             send_data = tcp_encoder.create_tcp_protocol(json_data, media_type, total_file_size, data)
-            print('current_send_data_len', len(data), "send_data: ", len(send_data))
             connection.send(send_data)
 
-            print("")
-            print("")
-            # バイト数の一致で見ないで、media_typeがnullで帰ってきたら終わりとかにする
-            # pipe brokenしてる
             total_sent_bytes += len(data)
 
             time.sleep(config.send_wait_sec)
@@ -180,8 +148,6 @@ def file_edit_main(connection: socket.socket, target_file_path: str, client_json
             # while抜けた後の最初のprint文が改行されるようにするために、制御コードが増えている
             sys.stdout.write(f"\033[2K\033[1A\033[2K\033[G{processing_message}\n" )
             sys.stdout.flush()
-
-            print("")
 
             data = f.read(read_bytes)
         print("編集したファイルの送信完了")
