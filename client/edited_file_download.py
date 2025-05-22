@@ -29,7 +29,6 @@ def edited_file_download(sock: socket.socket):
 
         if media_type == "null" :
             file_size = len(file)
-            print("media_typeがnullなので、多分指定されたファイルサイズと送られたデータのサイズが一致しました", file_size)
             if file_size == total_payload_size:
                 print("指定されたファイルサイズと送られたデータのサイズが一致しました")
                 break
